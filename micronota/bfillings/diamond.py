@@ -148,7 +148,7 @@ class DiamondView(Diamond):
 
 
 def make_db(i, o, params=None):
-    '''Format database from a fasta file.
+    '''Format diamond database from a fasta file.
 
     This is similar to running ``diamond makedb --in db.faa --db db``.
 

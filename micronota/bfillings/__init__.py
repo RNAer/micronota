@@ -16,9 +16,6 @@ Classes
 .. autosummary::
    :toctree: _autosummary
 
-   Prodigal
-   CMPress
-
 
 Functions
 ---------
@@ -27,6 +24,12 @@ Functions
    :toctree: _autosummary
 
    predict_genes
+   cmpress_cm
+   cmscan_fasta
+   hmmpress_hmm
+   hmmscan_fasta
+   make_db
+   search_protein_homologs
 
 '''
 
@@ -39,8 +42,13 @@ Functions
 # ----------------------------------------------------------------------------
 
 
-from .prodigal import Prodigal, predict_genes
-from .infernal import CMPress
+from .prodigal import predict_genes
+from .infernal import cmpress_cm, cmscan_fasta
+from .hmmer import hmmpress_hmm, hmmscan_fasta
+from .diamond import make_db, search_protein_homologs
 
 
-__all__ = ['Prodigal', 'CMPress', 'predict_genes']
+__all__ = ['predict_genes',
+           'cmpress_cm', 'cmscan_fasta',
+           'hmmpress_hmm', 'hmmscan_fasta',
+           'make_db', 'search_protein_homologs']
