@@ -1,0 +1,24 @@
+#+TITLE micronota
+
+[[https://coveralls.io/github/biocore/micronota?branch=master][https://coveralls.io/repos/biocore/micronota/badge.svg?branch=master&service=github]]  [[https://travis-ci.org/biocore/micronota][https://travis-ci.org/biocore/micronota.svg?branch=master]]  [[https://gitter.im/biocore/micronota?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge][https://badges.gitter.im/Join%20Chat.svg]]
+
+
+    | Features                | Supported | Tools                                            |
+    |-------------------------+-----------+--------------------------------------------------|
+    | coding gene             | yes       | Prodigal                                         |
+    | tRNA                    | yes       | Aragorn                                          |
+    | ncRNA                   | yes       | Infernal                                         |
+    | CRISPR                  | yes       | MinCED                                           |
+    | ribosomal binding sites | ongoing   | RBSFinder                                        |
+    | prophage                | ongoing   | PHAST                                            |
+    | replication origin      |           | Ori-Finder 1 (bacteria) & Ori-Finder 2 (archaea) |
+    | microsatellites         |           |                                                  |
+    | signal peptide          | ongoing   | SignalP                                          |
+    | transmembrane proteins  | ongoing   | TMHMM                                            |
+
+
+    | Databases | Supported |
+    |-----------+-----------|
+    | TIGRFAM   | yes       |
+    | UniRef    | yes       |
+    | Rfam      | ongoing   |
