@@ -27,19 +27,15 @@ class Tests(TestCase):
         self.o = join(self.tmpd, 'o.fna')
 
     def test_annotate(self):
-        config = {'structural_annotation': {'minced':
-                                            {'params': '',
-                                             'priority': 50,
-                                             'output': 'minced',
-                                             'threads': 1},
-                                            'prodigal':
-                                            {'params': '-p meta -f gff',
-                                             'priority': 90,
-                                             'output': 'prodigal',
-                                             'threads': 1}},
-                  'protein': {},
-                  'bacteria': {},
-                  'general': {'metadata': 'foo.sqlite'}}
+        config = {'CRISPR': {'minced':
+                             {'params': '',
+                              'priority': 50,
+                              'threads': 1}},
+                  'CDS': {'prodigal':
+                          {'params': '-p meta -f gff',
+                           'priority': 90,
+                           'threads': 1}}}
+                  
         config_fp = join(self.tmpd, 'config.yaml')
         with open(config_fp, 'w') as f:
             yaml.dump(config, f, default_flow_style=True)
