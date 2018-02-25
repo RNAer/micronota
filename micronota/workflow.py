@@ -8,6 +8,7 @@
 
 import os
 from os.path import join, exists, basename, splitext, expanduser, abspath
+from collections import defaultdict
 from logging import getLogger
 from importlib import import_module
 from time import gmtime, strftime
@@ -28,7 +29,7 @@ logger = getLogger(__name__)
 
 
 def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
-             gcode, kingdom, mode, task,
+             gcode, kingdom, mode, tasks,
              cpus, force, dry_run, quality, config):
     '''Annotate the sequences in the input file.
 
@@ -55,6 +56,7 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
     force : bool
         Force to overwrite.
     dry_run : bool
+        whether to actually run the commands
     config : config file for snakemake
     '''
     logger.debug('working dir: %s' % out_dir)
@@ -77,7 +79,6 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
         # this file is updated.
         logger.debug('the filtered sequence file already exists. skip validating step.')
     else:
-        ids = set()
         with open(seq_fp, 'w') as out:
             for seq in check_seq(in_fp, in_fmt, lambda s: len(s) < min_len):
                 write(seq, format='fasta', into=out)
@@ -92,46 +93,38 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
     with open(config) as fh:
         cfg = yaml.load(fh)
 
-    general = cfg.pop('general', {})
-    rules = {}
-    if not task:
-        task = [i for i in cfg]
-    for k, v in cfg.items():
-        # specify the annotation task
-        if k in task:
-            if v is not None:
-                for vk, vv in v.items():
-                    if vk in rules:
-                        raise ValueError('You have multiple config for rule %s' % vk)
-                    rules[vk] = vv
+    rules_cfg = {}
+    if not tasks:
+        # specify the annotation tasks
+        tasks = [i for i in cfg]
+    protein_cfg = {}
+    for task in tasks:
+        try:
+            v = cfg[task]
+        except KeyError:
+            raise KeyError('The task is not available to run: %s' % task)
+        if task == 'protein':
+            protein_cfg = v.pop('config', protein_cfg)
+        for vk, vv in v.items():
+            if vk in rules_cfg:
+                raise ValueError('You have duplicate rule %s' % vk)
+            rules_cfg[vk] = vv
 
-    ## update the parameters of relevant tools with options from cmd line
-    if 'prodigal' in rules:
-        param = '%s -g %d' % (rules['prodigal']['params'], gcode)
-        if mode == 'finished':
-            param = '-p single -c ' + param
-        elif mode == 'draft':
-            param = '-p single ' + param
-        elif mode == 'metagenome':
-            param = '-p meta ' + param
-        rules['prodigal']['params'] = param
-    if 'aragorn' in rules:
-        rules['aragorn']['params'] = '%s -gc%d' % (rules['aragorn']['params'], gcode)
-    if 'rnammer' in rules:
-        rules['rnammer']['params'] = '-S %s %s' % (kingdom[:3], rules['rnammer']['params'])
-
+    logger.debug('set annotation config: %r' % rules_cfg)
     # only run the targets specified in the yaml file
-    targets = list(rules.keys())
+    targets = list(rules_cfg.keys())
     if not targets:
-        logger.warning('No annotation task to run')
+        logger.warning('No annotation tasks to run')
         return
-    rules['seq'] = seq_fp
 
     cfg_file = join(out_dir, 'snakemake.yaml')
+    # other config values passing to snakemake file
+    rules_cfg.update(mode=mode, kingdom=kingdom, gcode=gcode, seq=seq_fp)
     with open(cfg_file, 'w') as out:
-        yaml.dump(rules, out, default_flow_style=False)
+        yaml.dump(rules_cfg, out, default_flow_style=False)
 
     logger.debug('run snakemake workflow')
+
     success = snakemake(
         snakefile,
         cores=cpus,
@@ -142,7 +135,7 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
         printshellcmds=True,
         dryrun=dry_run,
         forceall=force,
-        # config=cfg,
+        # config=rules_cfg,
         configfile=cfg_file,
         keep_target_files=True,
         # provide this dummy to suppress unnecessary log
@@ -150,18 +143,18 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
         quiet=True,  # do not print job info
         keep_logger=False)
 
-    if success:
+    if success and not dry_run:
         # if snakemake finishes successfully
         out_fp = '%s.%s' % (out_prefix, out_fmt)
-        protein_xref = general.get('protein_xref')
+        protein_xref = protein_cfg.get('protein_xref')
         if protein_xref is not None:
             protein_xref = expanduser(protein_xref)
         seqs = integrate(seq_fp, out_prefix, protein_xref, out_fp, out_fmt)
-
         logger.info('Write summary of the annotation')
         with open(out_prefix + '.summary.txt', 'w') as out:
             summarize(seqs.values(), out)
         if mode != 'metagenome' and quality is True:
+            logger.info('Compute the quality score for the genome')
             with open(out_prefix + '.quality.txt', 'w') as out:
                 if mode == 'finish':
                     contigs = False
@@ -169,11 +162,12 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
                     contigs = True
                 seq_score = compute_seq_score(seqs.values(), contigs)
                 trna_score = rrna_score = gene_score = np.nan
-                if 'tRNA' in task:
+                if 'tRNA' in tasks:
                     trna_score = compute_trna_score((i.interval_metadata for i in seqs.values()))
-                if 'rRNA' in task:
+                if 'rRNA' in tasks:
                     rrna_score = compute_rrna_score((i.interval_metadata for i in seqs.values()))
-                if 'CDS' in task:
+                if 'CDS' in tasks:
+                    faa_fp = '%s.%s' % (out_prefix, 'faa')
                     gene_score = compute_gene_score(faa_fp)
                 out.write('# seq_score: %.2f  tRNA_score: %.2f  rRNA_score: %.2f  gene_score: %.2f\n' % (
                     seq_score, trna_score, rrna_score, gene_score))
@@ -183,7 +177,7 @@ def annotate(in_fp, in_fmt, min_len, out_dir, out_fmt,
     logger.info('Done with annotation')
 
 
-def integrate(seq_fp, annot_dir, protein_xref, out_fp, quality=False, out_fmt='gff3'):
+def integrate(seq_fp, annot_dir, protein_xref, out_fp, out_fmt='gff3'):
     '''integrate all the annotations and write to disk.
 
     Parameters
@@ -205,16 +199,16 @@ def integrate(seq_fp, annot_dir, protein_xref, out_fp, quality=False, out_fmt='g
     for seq in read(seq_fp, format='fasta'):
         seqs[seq.metadata['id']] = seq
 
-    rules = {splitext(f)[0] for f in os.listdir(annot_dir) if f.endswith('.ok')}
-    if 'diamond' in rules:
-        rules.discard('diamond')
+    rules_cfg = {splitext(f)[0] for f in os.listdir(annot_dir) if f.endswith('.ok')}
+    if 'diamond' in rules_cfg:
+        rules_cfg.discard('diamond')
         mod = import_module('.diamond', module.__name__)
         diamond = mod.Module(directory=annot_dir)
         diamond.parse(metadata=protein_xref)
         protein = diamond.result
     else:
         protein = {}
-    for rule in rules:
+    for rule in rules_cfg:
         logger.debug('parse the result from %s output' % rule)
         mod = import_module('.%s' % rule, module.__name__)
         obj = mod.Module(directory=annot_dir)

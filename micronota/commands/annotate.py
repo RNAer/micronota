@@ -42,13 +42,14 @@ from ..workflow import annotate
               help='Force overwrite if the output directory exists')
 @click.option('-d', '--dry-run', is_flag=True,
               help='Do not execute anything.')
-@click.option('--quality', type=bool, default=False,
-              help='whether to compute the quality score for the sequence/annotation')
+@click.option('--quality', is_flag=True, default=False,
+              help='whether to compute the quality score for the sequence/annotation. Only valid for single genome.')
 @click.option('--config', type=click.Path(exists=True, dir_okay=False),
               help='yaml file to config annotation workflow.')
-@click.argument('task', type=str, nargs=-1)
+@click.argument('tasks', type=str, nargs=-1)
+                # help='genetic features to annotate. Default to annotate all.')
 @click.pass_context
-def cli(ctx, in_seq, in_fmt, min_len, out_dir, out_fmt, gcode, kingdom, mode, task,
+def cli(ctx, in_seq, in_fmt, min_len, out_dir, out_fmt, gcode, kingdom, mode, tasks,
         cpu, force, dry_run, quality, config):
     '''Annotate genomic sequences.'''
     if gcode is None:
@@ -59,5 +60,5 @@ def cli(ctx, in_seq, in_fmt, min_len, out_dir, out_fmt, gcode, kingdom, mode, ta
 
     annotate(in_seq, in_fmt, min_len,
              out_dir, out_fmt,
-             gcode, kingdom, mode, task,
+             gcode, kingdom, mode, tasks,
              cpu, force, dry_run, quality, config)

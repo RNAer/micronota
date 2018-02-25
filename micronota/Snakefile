@@ -1,16 +1,15 @@
+import os
 from collections import defaultdict
 
-# default config settings for each wrapped tool.
-# default is empty
-default = defaultdict(str)
+from micronota.util import super_dict
+
 # the file path of the input sequence to annotate
-seq = config.get('seq', 'input.fna')
+seq = config['seq']
 
 
 # =============================================================================
 # Prodigal
 # =============================================================================
-_prodigal = config.get('prodigal', default)
 rule prodigal:
     '''Predict CDS with Prodigal.
 
@@ -25,17 +24,21 @@ rule prodigal:
     output:
         ok = touch('prodigal.ok'),
         gff = 'prodigal.gff',
-        faa = 'prodigal.faa',
+        faa = os.path.splitext(seq)[0] + '.faa',
         fna = 'prodigal.fna',
     log:
         'prodigal.log'
     params:
-        _prodigal['params']
+        '-f gff -g {gcode} {PRODIGAL_MODE}'.format(
+            **config,
+            PRODIGAL_MODE=dict(finished='-p single -c',
+                                draft='-p single',
+                                metagenome='-p meta')[config['mode']])
     priority:
-        _prodigal['priority']
+         config.get('prodigal', {}).get('priority', 0)
     shell:
-        'prodigal {params} -i {input[0]} -o {output.gff}'
-        ' -a {output.faa} -d {output.fna} &> {log}'
+        'prodigal {params} -i {input[0]} -o {output.gff} -a {output.faa} -d {output.fna} &> {log}'
+
 
 rule prodigal_coords:
     '''Create .coords file (from prodigal output) required by TransTermHP'''
@@ -61,7 +64,6 @@ rule prodigal_coords:
 # =============================================================================
 # TransTermHP
 # =============================================================================
-_transtermhp = config.get('transtermhp', default)
 rule transtermhp:
     '''Predict rho-independent transcription terminators with TransTermHP.
 
@@ -82,14 +84,16 @@ rule transtermhp:
     log:
         'transtermhp.log'
     params:
-        _transtermhp['params']
+        '-p $TRANSTERMHP'
+        # '--all-context'  # output all predicted terminators instead of legitimate ones
     priority:
-        _transtermhp['priority']
+        config.get('transtermhp', {}).get('priority', 0)
     shell:
         'transterm {params} {input[0]} {input[1]} > {output[0]} 2> {log}'
 
-
-_minced = config.get('minced', default)
+# =============================================================================
+# MINCED
+# =============================================================================
 rule minced:
     '''Predict CRISPR with minced.'''
     input:
@@ -100,14 +104,16 @@ rule minced:
     log:
         'minced.log'
     params:
-        _minced['params']
+        '-gff'
     priority:
-        _minced['priority']
+        config.get('minced', {}).get('priority', 0)
     shell:
-        'minced {params} -gff {input.fna} {output[0]} &> {log}'
+        'minced {params} {input.fna} {output[0]} &> {log}'
 
 
-_aragorn = config.get('aragorn', default)
+# =============================================================================
+# ARAGORN
+# =============================================================================
 rule aragorn:
     '''Predict tRNA with Aragorn.'''
     input:
@@ -118,18 +124,17 @@ rule aragorn:
     log:
         'aragorn.log'
     params:
-        _aragorn['params']
+        '-w -gc{gcode}'.format(**config)
     priority:
-        _aragorn['priority']
+        config.get('aragorn', {}).get('priority', 0)
     shell:
         'aragorn {params} -o {output[0]} {input.fna} &> {log}'
 
 
-_cmscan = config.get('cmscan', default)
 rule cmscan:
     '''Predict ncRNA with cmscan and Rfam.'''
     input:
-        db = _cmscan['db'],
+        db = config.get('cmscan', {}).get('db', ''),
         fna = seq
     output:
         # this is expansive to compute. protect it so it is not overwritten accidentally
@@ -138,16 +143,15 @@ rule cmscan:
     log:
         'cmscan.log'
     threads:
-        _cmscan['threads']
+        config.get('cmscan', {}).get('threads', 1)
     params:
-        _cmscan['params']
+        ''
     priority:
-        _cmscan['priority']
+        config.get('cmscan', {}).get('priority', 0)
     shell:
         'cmscan {params} --cpu {threads} --tblout {output[0]} {input.db} {input.fna} &> {log}'
 
 
-_tandem_repeats_finder = config.get('tandem_repeats_finder', default)
 rule tandem_repeats_finder:
     '''Predict tandem repeats with TRF.
 
@@ -167,19 +171,18 @@ rule tandem_repeats_finder:
     log:
         'tandem_repeats_finder.log'
     params:
-        _tandem_repeats_finder['params']
-    priority:
-        _tandem_repeats_finder['priority']
-    shell:
         # use recommended parameters
-        'trf {input[0]} 2 7 7 80 10 50 500 -h -ngs > {output[0]} 2> {log}'
+        '2 7 7 80 10 50 500 -h -ngs'
+    priority:
+        config.get('tandem_repeats_finder', {}).get('priority', 0)
+    shell:
+        'trf {input[0]} {params} > {output[0]} 2> {log}'
 
 
-_cmscan_rRNA = config.get('cmscan_rRNA', default)
 rule cmscan_rRNA:
     '''Predict rRNA with cmscan.'''
     input:
-        db = _cmscan_rRNA['db'],
+        db = config.get('cmscan_rRNA', {}).get('db', ''),
         fna = seq
     output:
         'cmscan_rRNA.txt',
@@ -187,15 +190,15 @@ rule cmscan_rRNA:
     log:
         'cmscan_rRNA.log'
     threads:
-        _cmscan_rRNA['threads']
+        config.get('cmscan_rRNA', {}).get('threads', 1)
     params:
-        _cmscan_rRNA['params']
+        ''
     priority:
-        _cmscan_rRNA['priority']
+        config.get('cmscan_rRNA', {}).get('priority', 1)
     shell:
         'cmscan {params} --cpu {threads} --tblout {output[0]} {input.db} {input.fna} &> {log}'
 
-_rnammer = config.get('rnammer', default)
+
 rule rnammer:
     '''Predict rRNA with RNAmmer.'''
     input:
@@ -204,33 +207,34 @@ rule rnammer:
         'rnammer.gff',
         ok = touch('rnammer.ok')
     params:
-        _rnammer['params']
+        # use bac, arc, and euk (3 letters) for -S param
+        '-m lsu,ssu,tsu -S {RNAMMER_KINGDOM}'.format(RNAMMER_KINGDOM=config['kingdom'][:3])
     shell:
         'rnammer {params} -gff {output[0]} {input.fna}'
 
 
 # =============================================================================
-# diamond_uniref
+# diamond_uniref90/50
 # protein homologous annotation using diamond and uniref
 # =============================================================================
 from micronota.util import _filter_sequence_ids
 
-_diamond_uniref90 = config.get('diamond_uniref90', default)
+
 rule diamond_uniref90:
     '''Homologous search UniRef90 with Diamond blastp.'''
     input:
-        db = _diamond_uniref90['db'],
-        faa = _diamond_uniref90['input']
+        db = config.get('diamond_uniref90', {}).get('db', ''),
+        faa = rules.prodigal.output['faa']
     output:
         protected('diamond_uniref90.m13')
     log:
         'diamond_uniref90.log'
     priority:
-        _diamond_uniref90['priority']
+        config.get('diamond_uniref90', {}).get('priority', 0)
     params:
-        _diamond_uniref90['params']
+        '--index-chunks 1 --id 90 --subject-cover 80 --query-cover 80 --max-target-seqs 3'
     threads:
-        _diamond_uniref90['threads']
+        config.get('diamond_uniref90', {}).get('threads', 1)
     shell:
         'diamond blastp {params} --threads {threads}'
         ' --db {input.db} -q {input.faa} -o {output[0]}'
@@ -242,32 +246,30 @@ rule unmatched_uniref90:
     '''Filter out the proteins that don't hit UniRef90'''
     input:
         rules.diamond_uniref90.output[0],
-        _diamond_uniref90['input']
+        rules.diamond_uniref90.input['faa']
     output:
-        faa = _diamond_uniref90['output']
+        faa = 'diamond_uniref90_unmatched.faa'
     run:
         with open(input[0]) as fh:
             ids = [line.split('\t')[0] for line in fh]
         _filter_sequence_ids(input[1], output.faa, ids)
 
 
-_diamond_uniref50 = config.get('diamond_uniref50', default)
 rule diamond_uniref50:
     '''Homologous search UniRef50 with Diamond blastp.'''
     input:
-        db = _diamond_uniref50['db'],
-        faa = _diamond_uniref50['input']
+        db = config.get('diamond_uniref50', {}).get('db', ''),
+        faa = rules.unmatched_uniref90.output.faa
     output:
-        protected('diamond_uniref50.m13'),
-        ok = touch('diamond.ok')
+        protected('diamond_uniref50.m13')
     log:
         'diamond_uniref50.log'
     priority:
-        _diamond_uniref50['priority']
+        config.get('diamond_uniref50', {}).get('priority', 0)
     params:
-        _diamond_uniref50['params']
+        '--index-chunks 1 --id 50 --subject-cover 80 --query-cover 80 --max-target-seqs 3'
     threads:
-        _diamond_uniref50['threads']
+        config.get('diamond_uniref50', {}).get('threads', 1)
     shell:
         'diamond blastp {params} --threads {threads}'
         ' --db {input.db} -q {input.faa} -o {output[0]}'
@@ -279,10 +281,20 @@ rule unmatched_uniref50:
     '''Filter out the proteins that don't hit UniRef50'''
     input:
         rules.diamond_uniref50.output[0],
-        _diamond_uniref90['input']
+        rules.unmatched_uniref90.output['faa']
     output:
-        faa = _diamond_uniref50['output']
+        faa = 'diamond_uniref50_unmatched.faa',
+        ok = touch('diamond_uniref.ok')
     run:
         with open(input[0]) as fh:
             ids = [line.split('\t')[0] for line in fh]
         _filter_sequence_ids(input[1], output.faa, ids)
+
+
+# rule all:
+#     input:
+#         rules.prodigal.output['ok'],
+#         rules.minced.output['ok'],
+#         rules.transtermhp.output['ok'],
+#         rules.rnammer.output['ok'],
+#         rules.diamond_uniref50.output['ok']
