@@ -14,21 +14,12 @@ from shutil import rmtree
 from skbio import write, read, Sequence, DNA
 from skbio.metadata import IntervalMetadata
 
-from micronota.util import _filter_sequence_ids, filter_partial_genes, check_seq, dict2defaultdict, super_defaultdict
+from micronota.util import _filter_sequence_ids, filter_partial_genes, check_seq
 
 
 class Tests(TestCase):
     def setUp(self):
         self.tmpd = mkdtemp()
-
-    def test_super_defaultdict(self):
-        d = {'a': 'A', 'b': {'B': 'C'}}
-        a = super_defaultdict(d, ['a', 'b'], int)
-        print(a)
-        
-    def test_dict2defaultdict(self):
-        d = {'a': 'A', 'b': {'B': 'C'}}
-        obs = dict2defaultdict(d)
         
     def test_filter_sequence_ids(self):
         seqs = [Sequence('A', {'id': 'seq1', 'description': ''}),

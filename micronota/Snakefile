@@ -1,11 +1,9 @@
 import os
 from collections import defaultdict
 
-from micronota.util import super_dict
 
 # the file path of the input sequence to annotate
 seq = config['seq']
-
 
 # =============================================================================
 # Prodigal

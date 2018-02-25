@@ -26,38 +26,6 @@ from skbio import read, write, Sequence, DNA
 logger = getLogger(__name__)
 
 
-def super_dict(d, keys, default_factory):
-    if not isinstance(d, dict):
-        return default_factory()
-
-    for i in range(len(keys)):
-        k = keys[i]
-        if k in d:
-            return super_defaultdict(d[k], keys[i:], default_factory)
-        else:
-            return default_factory()
-
-
-def dict2defaultdict(d, default_factory=int):
-    '''Iteratively convert regular dict into defaultdict.
-
-    Parameters
-    ----------
-    d : object
-        the object to be converted
-    default_factory : callable
-        the factory passing to :func:`defaultdict`.
-
-    Returns
-    -------
-    defaultdict
-    '''
-    if isinstance(d, dict):
-        d = defaultdict(
-            default_factory, {k: dict2defaultdict(v, default_factory) for k, v in d.items()})
-    return d
-
-
 def convert(in_f, in_fmt, out_f, out_fmt):
     '''convert between file formats
 
